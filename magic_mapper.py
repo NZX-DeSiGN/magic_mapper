@@ -5,8 +5,6 @@ import subprocess
 import json
 import fcntl
 
-EXCLUSIVE_ACCESS = True
-
 BUTTONS = {
     398: "red",
     399: "green",
@@ -37,7 +35,7 @@ BUTTONS = {
 }
 
 INPUT_DEVICE = "/dev/input/event3"
-EVIOCGRAB = 1074021776
+IGNORED_CODES = [0, 1, 1198, 1199]
 
 
 def cycle_energy_mode(inputs):
@@ -315,19 +313,15 @@ def input_loop(button_map):
     event_size = struct.calcsize(input_format)
     device_handle = open(device, "rb")
 
-    # If enabled, we'll grab exclusive access to the input device
-    if EXCLUSIVE_ACCESS:
-        fcntl.ioctl(device_handle, EVIOCGRAB, True)
-
     buttons_waiting = {}
-    ignore_buttons = {}
+
     while True:
         event = device_handle.read(event_size)
         (tv_sec, tv_usec, type, code, value) = struct.unpack(input_format, event)
         # print("debug code_wait: %s - code: %s - value: %s" % (code_wait, code, value))
         now = time.time()
 
-        if code in [0, 1] or code in ignore_buttons:  # ignore these
+        if code in IGNORED_CODES:
             continue
 
         # Button Down
@@ -341,32 +335,17 @@ def input_loop(button_map):
 
         # Button Up
         if value == 0:
-
-            if code in ignore_buttons:
-                del ignore_buttons[code]
-                continue
-
             if code not in buttons_waiting:
                 print("WARNING: Got code %s UP with no DOWN" % code)
                 continue
             elif code not in BUTTONS:
                 print("Unknown button pressed. (code=%s)" % code)
-                if EXCLUSIVE_ACCESS:
-                    ignore_buttons[code] = now
-                    forward_exclusive_button(code, device, device_handle)
             elif now - buttons_waiting[code] > 1.0:
                 print("Ignoring long press of %s" % BUTTONS[code])
             else:
                 print("%s button up" % BUTTONS[code])
                 fire_event(code, button_map)
             del(buttons_waiting[code])
-
-
-def forward_exclusive_button(code, device, device_handle):
-    """Release the exclusive lock and resend the key press"""
-    fcntl.ioctl(device_handle, EVIOCGRAB, False)
-    send_keystroke(device, code)
-    fcntl.ioctl(device_handle, EVIOCGRAB, True)
 
 
 def main():
