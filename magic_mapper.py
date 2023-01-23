@@ -3,6 +3,9 @@ import os
 import struct
 import subprocess
 import json
+import fcntl
+
+EXCLUSIVE_ACCESS = True
 
 BUTTONS = {
     398: "red",
@@ -34,6 +37,7 @@ BUTTONS = {
 }
 
 INPUT_DEVICE = "/dev/input/event3"
+EVIOCGRAB = 1074021776
 
 
 def cycle_energy_mode(inputs):
@@ -209,14 +213,13 @@ def get_button_map():
 
 
 def fire_event(code, button_map):
-    print("firing event for code: %s" % code)
+    """Execute the function configured for the button"""
     button_name = BUTTONS[code]
-    print("button_name: %s" % button_name)
-
     if button_name not in button_map:
         print("Button %s not configured in magic_mapper_config.json " % button_name)
         return
 
+    print("firing event for code: %s button: %s" % (code, button_name))
     func_name = button_map[button_name]["function"]
     print("func_name: %s" % func_name)
     inputs = button_map[button_name].get("inputs", {})
@@ -311,45 +314,59 @@ def input_loop(button_map):
     input_format = "llHHI"
     event_size = struct.calcsize(input_format)
     device_handle = open(device, "rb")
-    # device_handle = os.open(device, os.O_RDONLY)
-    event = device_handle.read(event_size)
 
-    code_wait = None  # Are we waiting for button up
-    code_wait_start = None
-    while event:
+    # If enabled, we'll grab exclusive access to the input device
+    if EXCLUSIVE_ACCESS:
+        fcntl.ioctl(device_handle, EVIOCGRAB, True)
+
+    buttons_waiting = {}
+    ignore_buttons = {}
+    while True:
+        event = device_handle.read(event_size)
         (tv_sec, tv_usec, type, code, value) = struct.unpack(input_format, event)
         # print("debug code_wait: %s - code: %s - value: %s" % (code_wait, code, value))
+        now = time.time()
 
-        if code_wait and value == 1:
-            print("WARNING: Got code %s DOWN while waiting for code %s UP" % (code, code_wait))
-            code_wait = None
+        if code in [0, 1] or code in ignore_buttons:  # ignore these
+            continue
 
-        if code in BUTTONS:
-
-            if not code_wait and value == 1:  # Start waiting for button up
+        # Button Down
+        if value == 1:
+            if code in buttons_waiting and now - buttons_waiting[code] < 1.0:
+                print("WARNING: Got code %s DOWN while waiting for UP" % code)
+            buttons_waiting[code] = now
+            if code in BUTTONS:
                 print("%s button down" % BUTTONS[code])
-                code_wait = code
-                code_wait_start = time.time()
-            elif code_wait == code and value == 0:
+            continue
 
-                # We need to ignore long presses
-                now = time.time()
-                button_hold_duration = now - code_wait_start
-                # print("button_hold_duration: %s" % button_hold_duration)
+        # Button Up
+        if value == 0:
 
-                code_wait = None
-                code_wait_start = None
+            if code in ignore_buttons:
+                del ignore_buttons[code]
+                continue
 
-                if button_hold_duration < 1.0:
-                    print("%s button up" % BUTTONS[code])
-                    fire_event(code, button_map)
-                else:
-                    print("Ignoring long press of %s" % BUTTONS[code])
+            if code not in buttons_waiting:
+                print("WARNING: Got code %s UP with no DOWN" % code)
+                continue
+            elif code not in BUTTONS:
+                print("Unknown button pressed. (code=%s)" % code)
+                if EXCLUSIVE_ACCESS:
+                    ignore_buttons[code] = now
+                    forward_exclusive_button(code, device, device_handle)
+            elif now - buttons_waiting[code] > 1.0:
+                print("Ignoring long press of %s" % BUTTONS[code])
+            else:
+                print("%s button up" % BUTTONS[code])
+                fire_event(code, button_map)
+            del(buttons_waiting[code])
 
-        elif code not in [0, 1] and value == 0:
-            print("Unknown button pressed. (code=%s)" % code)
 
-        event = device_handle.read(event_size)
+def forward_exclusive_button(code, device, device_handle):
+    """Release the exclusive lock and resend the key press"""
+    fcntl.ioctl(device_handle, EVIOCGRAB, False)
+    send_keystroke(device, code)
+    fcntl.ioctl(device_handle, EVIOCGRAB, True)
 
 
 def main():
