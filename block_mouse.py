@@ -1,43 +1,36 @@
-import fcntl
-import struct
 import os
-import time
+import struct
+import fcntl
 
 INPUT_DEVICE = "/dev/input/event3"
-OUTPUT_DEVICE = "/dev/uinput"
-
+UINPUT_DEVICE = "/dev/uinput"
 EVIOCGRAB = 1074021776
 
-UI_SET_EVBIT = 0x40045564
-UI_SET_KEYBIT = 0x40045565
+# List of input codes to filter out
+FILTERED_CODES = [1, 2, 3]
+INPUT_FORMAT = "llHHi"
 
 
-def main():
-    device = INPUT_DEVICE
-    input_format = "llHHI"
-    event_size = struct.calcsize(input_format)
-    inputfd = open(device, "rb")
-    fcntl.ioctl(inputfd, EVIOCGRAB, True)
-    ignored_codes = []
+def read_input_event(input_device):
+    with open(input_device, "rb", buffering=0) as f:
+        # set the input device to exclusive mode
+        fcntl.ioctl(f, EVIOCGRAB, 1)
+        while True:
+            event = f.read(struct.calcsize(INPUT_FORMAT))
+            if event:
+                (tv_sec, tv_usec, type, code, value) = struct.unpack(INPUT_FORMAT, event)
+                print(code)
+                # filter out the input codes in FILTERED_CODES
+                if code not in FILTERED_CODES:
+                    yield event
 
-    # Open the virtual input device
-    uinput = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
 
-    # Set the type of events to generate
-    os.ioctl(uinput, UI_SET_EVBIT, struct.pack("I", 0x01))
-    os.ioctl(uinput, UI_SET_KEYBIT, struct.pack("I", 1))
-
-    # Enable the virtual input device
-    os.write(uinput, struct.pack("16sHHi", "Virtual Input", 0, 0, 0))
-
-    while True:
-        event = inputfd.read(event_size)
-
-        (tv_sec, tv_usec, event_type, code, value) = struct.unpack(input_format, event)
-        print("code: %s  value: %s" % (code, value))
-        if code not in ignored_codes:
-            os.write(uinput, struct.pack("iihhi", tv_sec, tv_usec, event_type, code, value))
+def write_input_event(input_event, uinput_device):
+    return
+    with open(uinput_device, "wb") as f:
+        f.write(input_event)
 
 
 if __name__ == "__main__":
-    main()
+    for event in read_input_event(INPUT_DEVICE):
+        write_input_event(event, UINPUT_DEVICE)
