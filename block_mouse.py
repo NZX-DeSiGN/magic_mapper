@@ -8,32 +8,35 @@ OUTPUT_DEVICE = "/dev/uinput"
 
 EVIOCGRAB = 1074021776
 
+UI_SET_EVBIT = 0x40045564
+UI_SET_KEYBIT = 0x40045565
+
 
 def main():
     device = INPUT_DEVICE
     input_format = "llHHI"
     event_size = struct.calcsize(input_format)
     inputfd = open(device, "rb")
-    outputfd = open(OUTPUT_DEVICE, "wb")
     fcntl.ioctl(inputfd, EVIOCGRAB, True)
-    ignored_codes = ["1198", "1199"]
-    forwarded_events = {}
+    ignored_codes = []
+
+    # Open the virtual input device
+    uinput = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+
+    # Set the type of events to generate
+    os.ioctl(uinput, UI_SET_EVBIT, struct.pack("I", 0x01))
+    os.ioctl(uinput, UI_SET_KEYBIT, struct.pack("I", 1))
+
+    # Enable the virtual input device
+    os.write(uinput, struct.pack("16sHHi", "Virtual Input", 0, 0, 0))
 
     while True:
-        now = time.time()
         event = inputfd.read(event_size)
-
-        if event in forwarded_events:
-            del(forwarded_events[event])
-            continue
 
         (tv_sec, tv_usec, event_type, code, value) = struct.unpack(input_format, event)
         print("code: %s  value: %s" % (code, value))
         if code not in ignored_codes:
-            forwarded_events[event] = now
-            outputfd.write(event)
-        else:
-            print('ignoring code %s' % code)
+            os.write(uinput, struct.pack("iihhi", tv_sec, tv_usec, event_type, code, value))
 
 
 if __name__ == "__main__":
