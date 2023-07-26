@@ -98,6 +98,20 @@ def toggle_eye_comfort(inputs):
         show_message("Reduce blue light mode: %s" % new_mode)
 
 
+def set_picture_mode(inputs):
+    """Sets the picture mode
+    Inputs:
+        - mode (string, default: none)
+            - Valid values: cinema, eco, expert1, expert2, game, normal, photo, sports, technicolor, vivid, hdrEffect, hdrCinema, hdrCinemaBright, hdrExternal, hdrGame, hdrStandard, hdrTechnicolor, hdrVivid, dolbyHdrCinema,dolbyHdrCinemaBright, dolbyHdrDarkAmazon, dolbyHdrGame, dolbyHdrStandard, dolbyHdrVivid, dolbyStandard
+    """
+    mode = inputs["mode"]
+    endpoint = "luna://com.webos.settingsservice/setSystemSettings"
+    payload = {"category": "picture", "settings": {"pictureMode": mode}}
+    luna_send(endpoint, payload)
+
+    if inputs.get("notifications"):
+        show_message("Picture mode: %s" % mode)
+
 def screen_off(inputs):
     """Turns the screen off, but not the TV itself.
     Press any button but power and vol to turn it back on.
