@@ -289,6 +289,15 @@ def set_dynamic_tone_mapping(inputs):
     luna_send(endpoint, payload)
 
 
+def exec_command(inputs):
+    # Execute command and return the output
+    command = inputs["command"]
+    print("running command: %s" % command)
+
+    output = subprocess.check_output(command)
+    return output
+
+
 ###################################
 # Private Functions
 # The fuctions below here should not be called by magic_mapper_config.json
