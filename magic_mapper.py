@@ -50,6 +50,7 @@ BUTTONS = {
     771: "channels",
     787: "channels_alt",  # seen on an LG IR remote
     994: "...",
+    829: "..._long",
     799: "...alt",  # seen on an LG IR remote, button with three dots surrounded by a rectangle
     1083: "search",
     217: "search_alt",  # seen on an LG IR remote
@@ -58,7 +59,16 @@ BUTTONS = {
     1116: "tv",
     358: "info",
     773: "home",
-    28: "ok"
+    28: "ok",
+    412: "back",
+    174: "back_long",
+    829: "..._long",
+    362: "list_long",
+    241: "source",
+    1023: "source_long",
+    139: "settings",
+    1022: "settings_long",
+    167: "red_long"
 }
 
 EVIOCGRAB = 1074021776  # Don't mess with this
