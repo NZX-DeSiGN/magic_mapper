@@ -446,7 +446,6 @@ def input_loop(button_map):
     input_format = "llHHI"
     event_size = struct.calcsize(input_format)
     input_device = open(INPUT_DEVICE, "rb")
-    buttons_waiting = {}
 
     if EXCLUSIVE_MODE:
         fcntl.ioctl(input_device, EVIOCGRAB, 1)
@@ -472,22 +471,8 @@ def input_loop(button_map):
 
         # Button Down
         if value == 1:
-            print("%s button down" % BUTTONS[code])
-            if code in buttons_waiting and now - buttons_waiting[code] < 1.0:
-                print("WARNING: Got code %s DOWN while waiting for UP" % code)
-            buttons_waiting[code] = now
-
-        # Button Up
-        if value == 0:
-            if code not in buttons_waiting:
-                print("WARNING: Got code %s UP with no DOWN" % code)
-            elif now - buttons_waiting[code] > 1.0:
-                print("Ignoring long press of %s" % BUTTONS[code])
-            else:
-                print("%s button up" % BUTTONS[code])
-                fire_event(code, button_map)
-            if code in buttons_waiting:
-                del buttons_waiting[code]
+            print("%s button" % BUTTONS[code])
+            fire_event(code, button_map)
 
 
 def main():
